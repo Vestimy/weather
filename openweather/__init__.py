@@ -1,5 +1,6 @@
 import requests
-from pprint import pprint
+import json
+from datetime import datetime
 
 
 class OpenWeather:
@@ -88,17 +89,24 @@ class OpenWeather:
             self.url = url
 
     def get_db(self, params):
-        data = self.model.query.filter(self.model.q == kwargs.get('q'))
+        data = self.model.query.filter(self.model.city == params.get('q')).first()
         if data:
-            return data
-        self.update_db(params)
+            if data.created_weather.strftime('%Y.%m.%d') != datetime.now().strftime('%Y.%m.%d'):
+                return self.delete_db(data, params)
+            return json.loads(data.json)
+        return self.update_db(params)
+
+    def delete_db(self,data, params):
+        self.db.session.delete(data)
+        self.db.session.commit()
+        return self.update_db(params)
 
     def update_db(self, params):
         data = self.request(self.params).text
-        mod = self.model(name=params.get('q'), json=data)
+        mod = self.model(city=params.get('q'), json=data)
         self.db.session.add(mod)
         self.db.session.commit()
-        return data
+        return json.loads(data)
 
     def get(self, **kwargs):
         if self.is_api():
@@ -111,9 +119,3 @@ class OpenWeather:
             data = self.request(self.params)
             self.cache[kwargs.get('q')] = data
             return data.json()
-
-
-if __name__ == "__main__":
-    req = OpenWeather('7457f5e9ef9836778c2df4e92d173e3f')
-    data = req.get(q='Воронеж')
-    pprint(data.get('name'))
